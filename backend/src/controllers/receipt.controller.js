@@ -17,7 +17,7 @@ class ReceiptController {
       }
 
       const imagePath = req.file.path;
-      const userId = req.body.userId || null; // For demo, userId is optional
+      const userId = req.user ? req.user._id : null; // Get from authenticated user
 
       console.log(`Processing receipt image: ${imagePath}`);
 
@@ -31,7 +31,7 @@ class ReceiptController {
       });
 
     } catch (error) {
-      console.error('Upload receipt error:', error);
+      console.error('Upload receipt error:', error?.stack || error);
       
       // Clean up uploaded file if processing failed
       if (req.file && req.file.path) {
@@ -44,7 +44,8 @@ class ReceiptController {
 
       res.status(500).json({
         error: 'Failed to process receipt',
-        message: error.message
+        message: error.message,
+        details: process.env.NODE_ENV !== 'production' ? (error?.stack || String(error)) : undefined
       });
     }
   }
@@ -64,7 +65,7 @@ class ReceiptController {
         limit: parseInt(req.query.limit) || 50
       };
 
-      const userId = req.query.userId;
+      const userId = req.user ? req.user._id : null; // Get from authenticated user
       const receipts = await receiptService.getReceipts(userId, filters);
 
       res.json({
@@ -155,7 +156,7 @@ class ReceiptController {
         dateTo: req.query.dateTo
       };
 
-      const userId = req.query.userId;
+      const userId = req.user ? req.user._id : null; // Get from authenticated user
       const analytics = await receiptService.getSpendingAnalytics(userId, options);
 
       res.json({

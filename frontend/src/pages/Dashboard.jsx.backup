@@ -1,0 +1,377 @@
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  Upload, 
+  FileText, 
+  TrendingUp, 
+  DollarSign,
+  PieChart,
+  Search,
+  User,
+  Settings,
+  LogOut,
+  Menu,
+  Plus,
+  BarChart3,
+  Filter,
+  Eye,
+  X
+} from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
+import { Modal } from '../components/ui/Modal'
+import { Loading } from '../components/ui/Loading'
+import { useAuth, useReceipts, useUI } from '../hooks/useStore'
+import { ReceiptUpload, ReceiptList } from '../components/receipt/ReceiptManager'
+
+const Dashboard = ({ onNavigate }) => {
+  const { user, logout } = useAuth()
+  const { receipts, analytics, isLoading, fetchReceipts, fetchAnalytics } = useReceipts()
+  const { sidebarOpen, toggleSidebar, showToast } = useUI()
+  
+  const [searchTerm, setSearchTerm] = useState('')
+  const [currentView, setCurrentView] = useState('overview')
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [showProfileModal, setShowProfileModal] = useState(false)
+
+  useEffect(() => {
+    fetchReceipts()
+    fetchAnalytics()
+  }, [fetchReceipts, fetchAnalytics])
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+      showToast('Logged out successfully', 'success')
+      onNavigate('landing')
+    } catch {
+      showToast('Logout failed', 'error')
+    }
+  }
+
+  // Calculate stats from receipts
+  const stats = {
+    totalReceipts: receipts.length,
+    totalSpent: receipts.reduce((sum, receipt) => sum + (receipt.total || 0), 0),
+    thisMonth: receipts.filter(receipt => {
+      const receiptDate = new Date(receipt.date || receipt.createdAt)
+      const now = new Date()
+      return receiptDate.getMonth() === now.getMonth() && receiptDate.getFullYear() === now.getFullYear()
+    }).reduce((sum, receipt) => sum + (receipt.total || 0), 0),
+    categories: [...new Set(receipts.map(r => r.category).filter(Boolean))].length,
+    avgPerReceipt: receipts.length > 0 ? receipts.reduce((sum, receipt) => sum + (receipt.total || 0), 0) / receipts.length : 0
+  }
+
+  const filteredReceipts = receipts.filter(receipt => {
+    const matchesSearch = receipt.vendor.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         receipt.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    if (selectedFilter === 'all') return matchesSearch
+    if (selectedFilter === 'recent') {
+      const weekAgo = new Date()
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      return matchesSearch && new Date(receipt.date) >= weekAgo
+    }
+    return matchesSearch
+  })
+
+  const statsCards = [
+    {
+      title: 'Total Receipts',
+      value: analytics?.totalReceipts || 0,
+      icon: FileText,
+      color: 'from-blue-500 to-blue-600',
+      change: '+12%'
+    },
+    {
+      title: 'This Month',
+      value: `$${analytics?.monthlyTotal || 0}`,
+      icon: TrendingUp,
+      color: 'from-green-500 to-green-600',
+      change: '+8%'
+    },
+    {
+      title: 'Categories',
+      value: analytics?.categoryCount || 0,
+      icon: PieChart,
+      color: 'from-purple-500 to-purple-600',
+      change: '+3'
+    },
+    {
+      title: 'Avg per Receipt',
+      value: `$${analytics?.averageAmount || 0}`,
+      icon: Calendar,
+      color: 'from-orange-500 to-orange-600',
+      change: '-2%'
+    }
+  ]
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loading size="lg" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Sidebar */}
+      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      } lg:translate-x-0 lg:static lg:inset-0`}>
+        <div className="flex items-center justify-between h-16 px-6 border-b">
+          <h1 className="text-xl font-bold text-gray-800">SnapCart</h1>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleSidebar}
+            className="lg:hidden"
+          >
+            <Menu className="w-5 h-5" />
+          </Button>
+        </div>
+        
+        <nav className="mt-8 px-4 space-y-2">
+          <Button variant="ghost" className="w-full justify-start">
+            <FileText className="w-5 h-5 mr-3" />
+            Dashboard
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start"
+            onClick={() => onNavigate('upload')}
+          >
+            <Upload className="w-5 h-5 mr-3" />
+            Upload Receipt
+          </Button>
+          <Button variant="ghost" className="w-full justify-start">
+            <TrendingUp className="w-5 h-5 mr-3" />
+            Analytics
+          </Button>
+          <Button variant="ghost" className="w-full justify-start">
+            <Settings className="w-5 h-5 mr-3" />
+            Settings
+          </Button>
+        </nav>
+
+        <div className="absolute bottom-4 left-4 right-4">
+          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
+              <User className="w-4 h-4 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {user?.name || 'User'}
+              </p>
+              <p className="text-xs text-gray-500 truncate">
+                {user?.email}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowProfileModal(true)}
+            >
+              <Settings className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="lg:pl-64">
+        {/* Header */}
+        <header className="bg-white shadow-sm border-b">
+          <div className="px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={toggleSidebar}
+                  className="lg:hidden"
+                >
+                  <Menu className="w-5 h-5" />
+                </Button>
+                <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <Button
+                  onClick={() => onNavigate('upload')}
+                  className="bg-purple-600 hover:bg-purple-700"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Receipt
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Logout
+                </Button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Dashboard Content */}
+        <main className="p-6">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {statsCards.map((stat, index) => (
+              <motion.div
+                key={stat.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+              >
+                <Card className="hover:shadow-lg transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600 mb-1">
+                          {stat.title}
+                        </p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {stat.value}
+                        </p>
+                        <p className="text-sm text-green-600 mt-1">
+                          {stat.change} from last month
+                        </p>
+                      </div>
+                      <div className={`w-12 h-12 bg-gradient-to-r ${stat.color} rounded-lg flex items-center justify-center`}>
+                        <stat.icon className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Receipts Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Recent Receipts</CardTitle>
+                <div className="flex items-center gap-4">
+                  <Input
+                    placeholder="Search receipts..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    icon={Search}
+                    className="w-64"
+                  />
+                  <select
+                    value={selectedFilter}
+                    onChange={(e) => setSelectedFilter(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="all">All Receipts</option>
+                    <option value="recent">Recent (7 days)</option>
+                  </select>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {filteredReceipts.length === 0 ? (
+                <div className="text-center py-12">
+                  <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No receipts found
+                  </h3>
+                  <p className="text-gray-500 mb-6">
+                    Start by uploading your first receipt to track expenses
+                  </p>
+                  <Button
+                    onClick={() => onNavigate('upload')}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload Receipt
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredReceipts.map((receipt, index) => (
+                    <motion.div
+                      key={receipt.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-gray-900">
+                            {receipt.vendor}
+                          </h4>
+                          <p className="text-sm text-gray-500">
+                            {new Date(receipt.date).toLocaleDateString()} • ${receipt.total}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm">
+                          <Download className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteReceipt(receipt.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+
+      {/* Profile Modal */}
+      <Modal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        title="Profile Settings"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Name"
+            value={user?.name || ''}
+            readOnly
+          />
+          <Input
+            label="Email"
+            value={user?.email || ''}
+            readOnly
+          />
+          <div className="flex justify-end gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowProfileModal(false)}
+            >
+              Close
+            </Button>
+            <Button>
+              Edit Profile
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+export default Dashboard

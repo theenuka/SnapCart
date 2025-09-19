@@ -6,12 +6,31 @@ require('dotenv').config();
 
 const connectDB = require('./config/database');
 const receiptRoutes = require('./routes/receipt.routes');
+const userRoutes = require('./routes/user.routes');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+// Allow frontend dev origins by default; override via CORS_ORIGINS env (comma-separated)
+const defaultOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174'
+]
+const allowedOrigins = (process.env.CORS_ORIGINS || defaultOrigins.join(','))
+  .split(',')
+  .map(o => o.trim());
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl) or allowed ones
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -46,6 +65,11 @@ app.locals.upload = upload;
 
 // Routes
 app.use('/api/receipts', receiptRoutes);
+app.use('/api/users', userRoutes);
+// Public health route for auth must come before mounting /api/auth router
+app.get('/api/auth/health', (req, res) => res.json({ success: true }));
+// Compatibility alias for frontend expecting /api/auth
+app.use('/api/auth', userRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
